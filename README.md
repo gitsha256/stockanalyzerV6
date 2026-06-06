@@ -1,5 +1,5 @@
 # NSE Stock Analyzer V6
-A comprehensive, institutional-grade technical analysis suite for the National Stock Exchange (NSE). V6 introduces a high-performance Symbol-State Pattern Cache, unified Market Universe selection, and an institutional-grade Manual RRG engine to identify high-conviction money flow.
+A comprehensive, institutional-grade technical analysis suite for the National Stock Exchange (NSE). V6 introduces a modular package architecture, high-performance Symbol-State Pattern Cache, and an integrated workflow orchestrator to streamline data-to-alpha generation.
 
 # run requirements
 `pip install -r requirements.txt`

@@ -7,5 +7,3 @@ nselib
 tqdm
 scipy>=1.10.0
 pandas-ta>=0.3.14b
-plotly
-streamlit

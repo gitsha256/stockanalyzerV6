@@ -68,12 +68,24 @@ def get_sector_rankings(snap: pd.DataFrame, snapshot_path: str) -> pd.DataFrame:
     # Get Benchmark
     print("   Fetching Nifty 50 benchmark...")
     try:
-        bench = yf.download("^NSEI", period="1y", progress=False)['Close']
-        if isinstance(bench, pd.DataFrame): bench = bench.squeeze()
+        bench_df = yf.download("^NSEI", period="1y", progress=False)
+        if bench_df.empty or 'Close' not in bench_df.columns:
+            raise ValueError("yfinance returned empty or invalid data")
+            
+        bench = bench_df['Close']
+        if isinstance(bench, pd.DataFrame): 
+            bench = bench.squeeze()
         bench.index = pd.to_datetime(bench.index).tz_localize(None)
     except Exception as e:
-        print(f"   ⚠️ Benchmark fetch failed: {e}. Falling back to synthetic market benchmark.")
-        bench = sector_prices.mean(axis=1)
+        print(f"   [WARN] yfinance unavailable — using equal-weighted market proxy as benchmark")
+        try:
+            # Build a proxy Nifty benchmark by computing the equal-weighted average of daily close prices across ALL symbols
+            bench = hist.groupby('datetime')['close'].mean()
+            bench.index = pd.to_datetime(bench.index).tz_localize(None)
+            if bench.empty:
+                raise ValueError("Market proxy calculation returned no data")
+        except Exception as fe:
+            raise RuntimeError(f"Critical Error: Failed to fetch Nifty benchmark and failed to build proxy from history. {fe}") from fe
 
     sector_summary = []
     for sector in sector_prices.columns:
