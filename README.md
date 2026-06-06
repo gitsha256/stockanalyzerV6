@@ -1,5 +1,5 @@
 # NSE Stock Analyzer V6
-A comprehensive, institutional-grade technical analysis suite for the National Stock Exchange (NSE). V5 introduces a proprietary Manual RRG engine, structural chart pattern recognition, and Weinstein stage analysis to identify high-conviction trading opportunities.
+A comprehensive, institutional-grade technical analysis suite for the National Stock Exchange (NSE). V6 introduces a high-performance Symbol-State Pattern Cache, unified Market Universe selection, and an institutional-grade Manual RRG engine to identify high-conviction money flow.
 
 # run requirements
 `pip install -r requirements.txt`
@@ -11,7 +11,7 @@ Follow this step-by-step guide to go from a fresh clone to your first trade pick
 Open your terminal (PowerShell or CMD) and run:
 ```bash
 # Move into the project directory
-cd stockanalyzerV5
+cd stockanalyzerV6
 
 # Create and activate a virtual environment
 python -m venv venv

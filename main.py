@@ -9,6 +9,18 @@ from stockanalyzer.analysis import perform_technical_analysis
 def main():
     logger = setup_logging(verbose=True)
     try:
+        print("\nSelect Market Universe:")
+        print("1. Nifty 500 (Default)")
+        print("2. Broader Market")
+        universe_choice = get_input("Choice (1/2 or Enter): ").strip()
+        
+        suffix = ""
+        if universe_choice == '2':
+            suffix = "_all"
+            CONFIG['SYMBOLS_FILE'] = CONFIG['SYMBOLS_FILE'].replace('symbols.csv', 'symbolsall.csv')
+            CONFIG['RAW_DATA_FILE'] = CONFIG['RAW_DATA_FILE'].replace('.csv', '_all.csv')
+            CONFIG['ADJUSTED_DATA_FILE'] = CONFIG['ADJUSTED_DATA_FILE'].replace('.csv', '_all.csv')
+
         symbols, sector_df, _ = load_symbols(CONFIG['SYMBOLS_FILE'])
         if not symbols:
             logger.error("No symbols loaded")
@@ -63,6 +75,10 @@ def main():
                 print(">>> Please run Option 3 (Adjust) first to generate this file.")
                 return
             
+            from stockanalyzer.pattern_cache import cache_stats
+            stats = cache_stats()
+            print(f"[CACHE] {stats['symbols_cached']} symbols cached | {stats['total_size_kb']:.0f} KB")
+
             adj = standardize_data(pd.read_csv(CONFIG['ADJUSTED_DATA_FILE']), logger=logger)
             date_input = get_input("Enter date range (DD-MM-YYYY to DD-MM-YYYY) or Enter for latest: ").strip()
             chart_choice = get_input("Enable Chart Pattern analysis? (y/N): ").strip().lower()
@@ -75,14 +91,14 @@ def main():
                     if not adj[mask].empty and (adj['datetime'] == d).any():
                         analysis_df = perform_technical_analysis(adj[mask], sector_df, enable)
                         if not analysis_df.empty:
-                            outfile = f"{d.strftime('%d-%m-%y')}snapshot.csv"
+                            outfile = f"{d.strftime('%d-%m-%y')}snapshot{suffix}.csv"
                             analysis_df.to_csv(outfile, index=False)
                             print(f"[SUCCESS] Saved {outfile}")
             else:
                 if date_input: adj = adj[adj['datetime'] <= datetime.strptime(date_input, '%d-%m-%Y')]
                 analysis_df = perform_technical_analysis(adj, sector_df, enable)
                 if not analysis_df.empty:
-                    outfile = f"{pd.to_datetime(analysis_df['date']).max().strftime('%d-%m-%y')}snapshot.csv"
+                    outfile = f"{pd.to_datetime(analysis_df['date']).max().strftime('%d-%m-%y')}snapshot{suffix}.csv"
                     analysis_df.to_csv(outfile, index=False)
                     print(f"[SUCCESS] Analysis complete. Saved to {outfile}")
                 else:

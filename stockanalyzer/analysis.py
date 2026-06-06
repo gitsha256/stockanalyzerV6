@@ -4,7 +4,7 @@ import os
 from scipy.signal import argrelextrema
 from tqdm import tqdm
 import logging
-from typing import Optional
+from typing import Optional, Tuple
 from datetime import datetime
 from .indicators import add_indicators
 from .patterns import detect_price_patterns
@@ -12,13 +12,14 @@ from .weinstein import calculate_weinstein_stage
 
 logger = logging.getLogger("stockanalyzer")
 
-def analyze_symbol(symbol: str, full_df: pd.DataFrame, enable_patterns: bool = True) -> Optional[pd.DataFrame]:
+def analyze_symbol(symbol: str, full_df: pd.DataFrame, enable_patterns: bool = True) -> Tuple[Optional[pd.DataFrame], bool]:
     """Performs full technical analysis on a single symbol."""
+    is_hit = False
     data = full_df[full_df['symbols'] == symbol].sort_values('datetime')
     if data.empty:
-        return None
+        return None, False
     if len(data) < 20:
-        return None
+        return None, False
     
     try:
         data = data.copy()
@@ -128,14 +129,43 @@ def analyze_symbol(symbol: str, full_df: pd.DataFrame, enable_patterns: bool = T
         volatility = data['close'].pct_change().rolling(window=21).std().iloc[-1] * np.sqrt(252) * 100 if len(data) >= 21 else np.nan
 
         if enable_patterns:
-            pattern_info = detect_price_patterns(data)
-            pattern = pattern_info.get('all_patterns', 'No Clear Pattern')
-            main_pattern = pattern_info.get('main_pattern', 'No Clear Pattern')
-            misc_patterns = pattern_info.get('misc_patterns', '')
-            p_conf = pattern_info.get('main_confidence', 0)
-            p_points = pattern_info.get('pattern_points', '')
-            p_start = pattern_info.get('pattern_start', '')
-            p_end = pattern_info.get('pattern_end', '')
+            from .pattern_cache import compute_symbol_state_hash, get_cached_pattern, save_pattern_cache
+            
+            # Calculate state hash for the current symbol data
+            hash12 = compute_symbol_state_hash(data)
+            cached = get_cached_pattern(symbol, hash12)
+            
+            if cached is not None:
+                # Restore from cache
+                main_pattern = cached.get("mpat") or "No Clear Pattern"
+                p_conf = cached.get("pcon") if cached.get("pcon") is not None else np.nan
+                p_start = cached.get("psta") or ""
+                p_end = cached.get("pend") or ""
+                p_points = cached.get("ppnt") or ""
+                misc_patterns = cached.get("xpat") or ""
+                pattern = cached.get("patt") or "No Clear Pattern"
+                is_hit = True
+            else:
+                # Compute and save to cache
+                pattern_info = detect_price_patterns(data)
+                pattern = pattern_info.get('all_patterns', 'No Clear Pattern')
+                main_pattern = pattern_info.get('main_pattern', 'No Clear Pattern')
+                misc_patterns = pattern_info.get('misc_patterns', '')
+                p_conf = pattern_info.get('main_confidence', 0)
+                p_points = pattern_info.get('pattern_points', '')
+                p_start = pattern_info.get('pattern_start', '')
+                p_end = pattern_info.get('pattern_end', '')
+                
+                save_pattern_cache(symbol, hash12, {
+                    "mpat": main_pattern,
+                    "pcon": p_conf,
+                    "psta": p_start,
+                    "pend": p_end,
+                    "ppnt": p_points,
+                    "xpat": misc_patterns,
+                    "patt": pattern
+                })
+                is_hit = False
         else:
             pattern = main_pattern = misc_patterns = 'Disabled'
             p_conf = 0; p_points = p_start = p_end = ''
@@ -175,24 +205,34 @@ def analyze_symbol(symbol: str, full_df: pd.DataFrame, enable_patterns: bool = T
             'PATTERN_CONFIDENCE': p_conf, 'PATTERN_POINTS': p_points,
             'PATTERN_START': p_start, 'PATTERN_END': p_end
         }
-        return pd.DataFrame([row])
+        return pd.DataFrame([row]), is_hit
     except Exception as e:
         logger.debug(f"Error analyzing {symbol}: {e}")
-        return None
+        return None, False
 
 def perform_technical_analysis(df: pd.DataFrame, sector_df: pd.DataFrame, enable_patterns: bool = True) -> pd.DataFrame:
     """Orchestrates analysis, applies rankings, and handles sector mapping."""
     all_syms = df['symbols'].unique()
     valid_symbols = [s for s in all_syms if len(df[df['symbols'] == s]) >= 20]
     
+    cache_hits = 0
+    cache_misses = 0
+    
     results = []
     for s in tqdm(valid_symbols, desc="Analyzing Symbols"):
-        res = analyze_symbol(s, df, enable_patterns)
+        res, is_hit = analyze_symbol(s, df, enable_patterns)
         if res is not None:
             results.append(res)
+            if enable_patterns:
+                if is_hit: cache_hits += 1
+                else: cache_misses += 1
         
     if not results:
         return pd.DataFrame()
+        
+    if enable_patterns and (cache_hits + cache_misses > 0):
+        ratio = (cache_hits / (cache_hits + cache_misses)) * 100
+        print(f"[CACHE] Hit: {cache_hits} | Miss: {cache_misses} | Ratio: {ratio:.1f}%")
         
     analysis_df = pd.concat(results, ignore_index=True)
     

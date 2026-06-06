@@ -49,13 +49,22 @@ def get_sector_rankings(snap: pd.DataFrame, snapshot_path: str) -> pd.DataFrame:
         history_file = "data.csv" if os.path.exists("data.csv") else "data_all.csv"
 
     if not os.path.exists(history_file):
-        raise FileNotFoundError(f"Historical data file ({history_file}) not found. Run analyzer first.")
+        raise FileNotFoundError(f"Historical data file ({history_file}) not found. Run main.py first.")
     
     print(f"   Loading history from {history_file}...")
     hist = pd.read_csv(history_file)
     hist['datetime'] = pd.to_datetime(hist['datetime'])
     hist['symbols'] = hist['symbols'].str.upper().str.strip()
     
+    # Create sector mapping and filter history
+    sector_map = snap.set_index('symb')['sect'].to_dict()
+    hist['sect'] = hist['symbols'].map(sector_map)
+    
+    # Synthesize Sector Indices (Equal Weighted)
+    print("   Synthesizing sector indices...")
+    sector_prices = hist.groupby(['datetime', 'sect'])['close'].mean().unstack().ffill()
+    sector_prices.index = pd.to_datetime(sector_prices.index).tz_localize(None)
+
     # Get Benchmark
     print("   Fetching Nifty 50 benchmark...")
     try:
@@ -65,15 +74,6 @@ def get_sector_rankings(snap: pd.DataFrame, snapshot_path: str) -> pd.DataFrame:
     except Exception as e:
         print(f"   ⚠️ Benchmark fetch failed: {e}. Falling back to synthetic market benchmark.")
         bench = sector_prices.mean(axis=1)
-
-    # Create sector mapping and filter history
-    sector_map = snap.set_index('symb')['sect'].to_dict()
-    hist['sect'] = hist['symbols'].map(sector_map)
-    
-    # Synthesize Sector Indices (Equal Weighted)
-    print("   Synthesizing sector indices...")
-    sector_prices = hist.groupby(['datetime', 'sect'])['close'].mean().unstack().ffill()
-    sector_prices.index = pd.to_datetime(sector_prices.index).tz_localize(None)
 
     sector_summary = []
     for sector in sector_prices.columns:

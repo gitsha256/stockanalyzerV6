@@ -27,3 +27,5 @@ __pycache__/
 .idea/
 .vscode/
 
+# Pattern detection cache
+.pattern_cache/
