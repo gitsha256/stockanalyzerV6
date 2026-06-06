@@ -1,0 +1,29 @@
+# Ignore private credentials
+.env
+# Ignore compiled Excel binary dashboards
+*.xlsx
+*.parquet
+
+# Ignore temporary local logs
+*.log
+# Python environment and build artifacts
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Logs
+*.log
+
+# Data files (allow project symbol lists)
+*.csv
+!symbols.csv
+!symbolsall.csv
+
+# Editor files
+*.swp
+*.swo
+.idea/
+.vscode/
+
