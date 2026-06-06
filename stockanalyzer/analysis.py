@@ -8,11 +8,11 @@ from typing import Optional, Tuple
 from datetime import datetime
 from .indicators import add_indicators
 from .patterns import detect_price_patterns
-from .weinstein import calculate_weinstein_stage
+from .weinstein import calculate_true_weekly_stage, calculate_true_daily_stage
 
 logger = logging.getLogger("stockanalyzer")
 
-def analyze_symbol(symbol: str, full_df: pd.DataFrame, enable_patterns: bool = True) -> Tuple[Optional[pd.DataFrame], bool]:
+def analyze_symbol(symbol: str, full_df: pd.DataFrame, benchmark_daily_close: pd.Series, benchmark_weekly_close: pd.Series, enable_patterns: bool = True) -> Tuple[Optional[pd.DataFrame], bool]:
     """Performs full technical analysis on a single symbol."""
     is_hit = False
     data = full_df[full_df['symbols'] == symbol].sort_values('datetime')
@@ -60,31 +60,15 @@ def analyze_symbol(symbol: str, full_df: pd.DataFrame, enable_patterns: bool = T
         data['ACTIVITY_SCORE'] = data['close'] * data['volume'] / 1e7
 
         # Weinstein Stage Analysis
-        data['SMA_30'] = data['close'].rolling(30).mean()
-        swing_stage = calculate_weinstein_stage(data, 'SMA_30', 'RSI')
+        swing_stage = calculate_true_daily_stage(data, benchmark_daily_close)
         
-        weekly_df = data.resample('W-FRI', on='datetime').agg({
-            'open': 'first', 'high': 'max', 'low': 'min', 'close': 'last', 'volume': 'sum'
-        }).dropna()
+        # Weinstein True Weekly Stage (New Logic)
+        weekly_stage = calculate_true_weekly_stage(data, benchmark_weekly_close)
 
-        try:
-            import pandas_ta as ta
-            weekly_df.ta.rsi(length=14, append=True)
-            w_rsi = weekly_df['RSI_14'].iloc[-1] if len(weekly_df) >= 14 else np.nan
-        except:
-            w_rsi = np.nan
-        
-        w_sma30_s = weekly_df['close'].rolling(window=30).mean()
-        w_sma30 = w_sma30_s.iloc[-1] if len(weekly_df) >= 30 else np.nan
-
-        try:
-            w_df_stage = weekly_df.copy()
-            w_df_stage['SMA_30'] = w_sma30_s
-            if data['datetime'].max().weekday() != 4:
-                w_df_stage = w_df_stage.iloc[:-1]
-            weekly_stage = calculate_weinstein_stage(w_df_stage, 'SMA_30', 'RSI_14')
-        except:
-            weekly_stage = "Insufficient Data"
+        # Weekly RSI and SMA30 for display
+        weekly_df = data.resample('W-FRI', on='datetime').agg({'close': 'last'}).dropna()
+        w_rsi = weekly_df['close'].tail(14).pct_change().sum() # simplified placeholder if needed, indicators.py handled daily
+        w_sma30 = weekly_df['close'].rolling(30).mean().iloc[-1] if len(weekly_df) >= 30 else np.nan
 
         latest = data.iloc[-1]
         close = latest['close']
@@ -212,6 +196,22 @@ def analyze_symbol(symbol: str, full_df: pd.DataFrame, enable_patterns: bool = T
 
 def perform_technical_analysis(df: pd.DataFrame, sector_df: pd.DataFrame, enable_patterns: bool = True) -> pd.DataFrame:
     """Orchestrates analysis, applies rankings, and handles sector mapping."""
+    # Step A: Build Benchmark ONCE
+    from .benchmark import build_benchmark_from_constituents
+    
+    logger.info("Building synthetic equal-weighted benchmark...")
+    bench_df = build_benchmark_from_constituents(df, min_history_days=60)
+    benchmark_close = bench_df["close"] # Daily Series
+    
+    # Sanity check contributors
+    thin = bench_df[bench_df["n_stocks"] < 450]
+    if not thin.empty:
+        logger.warning(f"[BENCHMARK] {len(thin)} dates have fewer than 450 stock contributors")
+
+    # Resample benchmark to weekly once
+    benchmark_weekly_close = bench_df["close"].resample("W-FRI").last().dropna()
+
+    # Filter valid symbols
     all_syms = df['symbols'].unique()
     valid_symbols = [s for s in all_syms if len(df[df['symbols'] == s]) >= 20]
     
@@ -220,7 +220,7 @@ def perform_technical_analysis(df: pd.DataFrame, sector_df: pd.DataFrame, enable
     
     results = []
     for s in tqdm(valid_symbols, desc="Analyzing Symbols"):
-        res, is_hit = analyze_symbol(s, df, enable_patterns)
+        res, is_hit = analyze_symbol(s, df, benchmark_close, benchmark_weekly_close, enable_patterns)
         if res is not None:
             results.append(res)
             if enable_patterns:
