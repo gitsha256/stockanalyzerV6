@@ -73,7 +73,13 @@ def colorize_snapshot(csv_path):
             ["zone", "Premium", "Dark Red", "Overbought Highs (Mean Reversion Risk)"],
             ["zone", "Near Discount", "Dark Green", "Accumulation Zone (Near Support)"],
             ["zone", "Equilibrium", "Yellow", "Mid-range Consolidation"],
-            ["MT_Zone", "Percentile Position", "Same as zone", "Position within the 60-day swing structure"]
+            ["MT_Zone", "Percentile Position", "Same as zone", "Position within the 60-day swing structure"],
+            ["stge_w", "Stage 1 (Base)", "Deep Green", "Weekly Base (Early Accumulation)"],
+            ["stge_w", "Stage 2 (Uptrend)", "Light Green", "Weekly Advancement Phase"],
+            ["stge_w", "Stage 3 (Top)", "Deep Red", "Weekly Distribution (High Risk)"],
+            ["stge_w", "Stage 4 (Downtrend)", "Light Red", "Weekly Declining Phase"],
+            ["mpat", "Rounding Bottom", "Blue", "Bullish Reversal Structure"],
+            ["mpat", "Cup and Handle", "Light Green", "Bullish Continuation Structure"]
         ]
         pd.DataFrame(legend_data).to_excel(writer, sheet_name='Legend', index=False, header=False)
 
@@ -159,9 +165,21 @@ def colorize_snapshot(csv_path):
             "Near Premium": DARK_RED_FILL
         }),
         ("stge", {
+            "Stage 1 (Base)": DARK_GREEN_FILL,
             "Stage 2 (Uptrend)": GREEN_FILL,
+            "Stage 3 (Top)": DARK_RED_FILL,
             "Stage 4 (Downtrend)": RED_FILL,
             "Stage 1/3 (Neutral)": YELLOW_FILL
+        }),
+        ("stge_w", {
+            "Stage 1 (Base)": DARK_GREEN_FILL,
+            "Stage 2 (Uptrend)": GREEN_FILL,
+            "Stage 3 (Top)": DARK_RED_FILL,
+            "Stage 4 (Downtrend)": RED_FILL
+        }),
+        ("mpat", {
+            "Rounding Bottom": F_BLUE,
+            "Cup and Handle": GREEN_FILL
         }),
         ("screener_type", {"Intraday": BLUE_FILL, "Swing": PatternFill(start_color='E2EFDA', end_color='E2EFDA', fill_type='solid')})
     ]:
