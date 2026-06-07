@@ -12,7 +12,7 @@ def main():
         print("\nSelect Market Universe:")
         print("1. Nifty 500 (Default)")
         print("2. Broader Market")
-        universe_choice = get_input("Choice (1/2 or Enter): ").strip()
+        universe_choice = get_input("Choice (1,2 or Enter): ").strip()
         
         suffix = ""
         if universe_choice == '2':
@@ -26,15 +26,15 @@ def main():
             logger.error("No symbols loaded")
             return
 
-        print("\nChoose Operation Mode:\n1. Fetch\n2. Update\n3. Adjust\n4. Analyze")
-        choice = get_input("Choice (1-4 or Q to quit): ").strip()
+        print("\nChoose Operation Mode:\n1. Fetch\n2. Update\n3. Adjust\n4. Analyze (Default)")
+        choice = get_input("Choice (1-4, default 4 or Q to quit): ").strip() or '4'
 
         raw_data = pd.DataFrame()
         if choice == '1':
             print("\nFetch Mode:")
-            print("1. Custom Dates (DD-MM-YYYY)")
-            print("2. Years Back (e.g. 3.0)")
-            date_choice = input("Enter choice (1/2): ").strip()
+            print("1. Custom Dates ")
+            print("2. Years Back ")
+            date_choice = input("Enter choice (1,2): ").strip()
             if date_choice == '1':
                 start = datetime.strptime(input("Start (DD-MM-YYYY): "), '%d-%m-%Y')
                 end = datetime.strptime(input("End (DD-MM-YYYY): "), '%d-%m-%Y')
@@ -81,8 +81,8 @@ def main():
 
             adj = standardize_data(pd.read_csv(CONFIG['ADJUSTED_DATA_FILE']), logger=logger)
             date_input = get_input("Enter date range (DD-MM-YYYY to DD-MM-YYYY) or Enter for latest: ").strip()
-            chart_choice = get_input("Enable Chart Pattern analysis? (y/N): ").strip().lower()
-            enable = chart_choice in ['y', 'yes']
+            chart_choice = get_input("Enable Chart Pattern analysis? Default is Y (Y/n): ").strip().lower()
+            enable = chart_choice in ['y', 'yes', '']
 
             if 'to' in date_input:
                 start_str, end_str = [d.strip() for d in date_input.split('to')]
