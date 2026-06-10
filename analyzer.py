@@ -90,7 +90,7 @@ def resolve_targets():
 
     return targets, suffix_flag
 
-def run_sma_confluence(file_path, threshold_pct):
+def run_sma_confluence(file_path, threshold_pct, output_dir="."):
     """Integrated SMA filter logic."""
     df = pd.read_csv(file_path)
     df.columns = df.columns.str.strip()
@@ -107,7 +107,7 @@ def run_sma_confluence(file_path, threshold_pct):
 
     matching = df_clean[df_clean.apply(is_confluence, axis=1)]
     base_name = os.path.splitext(os.path.basename(file_path))[0]
-    out_file = f"confluence_{base_name.replace('snapshot', '')}.csv"
+    out_file = os.path.join(output_dir, f"confluence_{base_name.replace('snapshot', '')}.csv")
     matching[['symb']].drop_duplicates().to_csv(out_file, index=False)
     print(f"   [SMA] {len(matching)} symbols saved to {out_file}")
 
@@ -118,8 +118,8 @@ def main():
 
     targets, suffix = resolve_targets()
     
-    threshold_input = input("\nEnter SMA threshold % [default 5]: ").strip()
-    sma_threshold = float(threshold_input if threshold_input else 5.0)
+    threshold_input = input("\nEnter SMA threshold % [default 2]: ").strip()
+    sma_threshold = float(threshold_input if threshold_input else 2.0)
 
     if not targets:
         print("No valid files identified.")
@@ -130,9 +130,28 @@ def main():
         print(f"📂 PROCESSING: {csv_path}")
         print(f"{'─'*60}")
 
+        # Extract date for folder naming (DD-MM-YYYY)
+        fname_base = os.path.basename(csv_path)
+        try:
+            # Try parsing as DD-MM-YY (e.g. 09-06-26)
+            dt_obj = datetime.strptime(fname_base[:8], "%d-%m-%y")
+        except ValueError:
+            try:
+                # Try parsing as DD-MM-YYYY (e.g. 09-06-2026)
+                dt_obj = datetime.strptime(fname_base[:10], "%d-%m-%Y")
+            except ValueError:
+                dt_obj = datetime.now()
+        
+        folder_name = dt_obj.strftime("%d-%m-%Y") + suffix
+        os.makedirs(folder_name, exist_ok=True)
+
         # 1. Excel Formatter
         print("\n1/4. Generating Formatted Excel...")
         formatter.colorize_snapshot(csv_path)
+        # Move the generated xlsx into the date folder
+        original_xlsx = csv_path.replace('.csv', '.xlsx')
+        if os.path.exists(original_xlsx):
+            os.replace(original_xlsx, os.path.join(folder_name, os.path.basename(original_xlsx)))
 
         # 2. Sectoral Analysis
         print("\n2/4. Running Sectoral RRG & Filtering...")
@@ -141,11 +160,12 @@ def main():
             sectors = sectoralanalysis.get_sector_rankings(snap, csv_path)
             candidates, steps = sectoralanalysis.build_candidates(snap, sectors)
             report_name = f"sector_report_{os.path.splitext(os.path.basename(csv_path))[0]}.xlsx"
-            with pd.ExcelWriter(report_name, engine='openpyxl') as writer:
+            report_path = os.path.join(folder_name, report_name)
+            with pd.ExcelWriter(report_path, engine='openpyxl') as writer:
                 candidates.to_excel(writer, sheet_name="Swing Candidates", index=False)
                 sectors.to_excel(writer, sheet_name="Sector RRG Snapshot", index=False)
-            sectoralanalysis.apply_corporate_styling(report_name)
-            print(f"   [Sector] Report saved: {report_name}")
+            sectoralanalysis.apply_corporate_styling(report_path)
+            print(f"   [Sector] Report saved: {report_path}")
         except Exception as e:
             print(f"   [ERROR] Sectoral Analysis failed: {e}")
 
@@ -154,15 +174,15 @@ def main():
         df = screen_stocks.load_csv(csv_path)
         intraday, pool_i = screen_stocks.screen_intraday(df, screen_stocks.INTRADAY_CFG)
         swing, pool_s = screen_stocks.screen_swing(df, screen_stocks.SWING_CFG)
-        # Logic for saving screener results is handled by screen_stocks formatting internally if we call its main flow components
+        
         snap_date = screen_stocks.parse_date_from_filename(csv_path)
-        screener_out = f"picks_{snap_date.replace(' ', '_')}{suffix}.xlsx"
+        screener_out = os.path.join(folder_name, f"picks_{snap_date.replace(' ', '_')}{suffix}.xlsx")
         screen_stocks.apply_professional_formatting(screener_out, pd.concat([intraday.assign(screener_type="Intraday"), swing.assign(screener_type="Swing")], ignore_index=True))
         print(f"   [Screener] Picks saved: {screener_out}")
 
         # 4. SMA Filter
         print("\n4/4. Running SMA Confluence Filter...")
-        run_sma_confluence(csv_path, sma_threshold)
+        run_sma_confluence(csv_path, sma_threshold, folder_name)
 
     print(f"\n\n✅ COMPLETED: All {len(targets)} snapshot(s) analyzed.")
 

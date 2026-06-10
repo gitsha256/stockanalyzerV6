@@ -16,8 +16,14 @@ from openpyxl.utils import get_column_letter
 # RRG ENGINE (v1 Re-implementation)
 # ─────────────────────────────────────────────
 def calculate_rrg_coordinates(sector_series: pd.Series, bench_series: pd.Series) -> tuple:
+    # ALIGNMENT FIX: Normalize indices to Date only (remove time/timezone)
+    sector_series.index = pd.to_datetime(sector_series.index).tz_localize(None).normalize()
+    bench_series.index = pd.to_datetime(bench_series.index).tz_localize(None).normalize()
+
     aligned_df = pd.DataFrame({'Sector': sector_series, 'Bench': bench_series}).dropna()
-    if len(aligned_df) < 100:
+    
+    if len(aligned_df) < 80: # Reduced from 100 to 80 to be more flexible for new users
+        print(f"   [DEBUG] Insufficient overlap for RRG: {len(aligned_df)} days found (min 80 required). Defaulting to 100.0")
         return pd.Series(100.0, index=sector_series.index), pd.Series(100.0, index=sector_series.index)
     
     rs = (aligned_df['Sector'] / aligned_df['Bench']) * 100
@@ -55,6 +61,7 @@ def get_sector_rankings(snap: pd.DataFrame, snapshot_path: str) -> pd.DataFrame:
     hist = pd.read_csv(history_file)
     hist['datetime'] = pd.to_datetime(hist['datetime'])
     hist['symbols'] = hist['symbols'].str.upper().str.strip()
+    print(f"   [INFO] Local history contains {hist['datetime'].nunique()} unique trading days.")
     
     # Create sector mapping and filter history
     sector_map = snap.set_index('symb')['sect'].to_dict()
@@ -63,25 +70,42 @@ def get_sector_rankings(snap: pd.DataFrame, snapshot_path: str) -> pd.DataFrame:
     # Synthesize Sector Indices (Equal Weighted)
     print("   Synthesizing sector indices...")
     sector_prices = hist.groupby(['datetime', 'sect'])['close'].mean().unstack().ffill()
-    sector_prices.index = pd.to_datetime(sector_prices.index).tz_localize(None)
+    sector_prices.index = pd.to_datetime(sector_prices.index).tz_localize(None).normalize()
 
     # Get Benchmark
     print("   Fetching Nifty 50 benchmark...")
     try:
-        bench_df = yf.download("^NSEI", period="1y", progress=False)
-        if bench_df.empty or 'Close' not in bench_df.columns:
-            raise ValueError("yfinance returned empty or invalid data")
+        # Check historical coverage requirement
+        hist_end = hist['datetime'].max().tz_localize(None).normalize()
+        
+        bench_df = yf.download("^NSEI", period="2y", progress=False)
+        if bench_df.empty:
+            raise ValueError("yfinance returned no data")
             
-        bench = bench_df['Close']
-        if isinstance(bench, pd.DataFrame): 
-            bench = bench.squeeze()
-        bench.index = pd.to_datetime(bench.index).tz_localize(None)
+        # Handle potential MultiIndex columns in recent yfinance versions
+        if isinstance(bench_df.columns, pd.MultiIndex):
+            if 'Close' in bench_df.columns.levels[0]:
+                bench = bench_df['Close'].iloc[:, 0]
+            else:
+                bench = bench_df.iloc[:, 0]
+        else:
+            bench = bench_df['Close']
+            
+        if isinstance(bench, pd.DataFrame): bench = bench.squeeze()
+
+        bench.index = pd.to_datetime(bench.index).tz_localize(None).normalize()
+        
+        # Verify if the benchmark reaches the end of our history
+        if bench.index.max() < hist_end:
+            raise ValueError(f"Benchmark ends at {bench.index.max().date()}, but history reaches {hist_end.date()}")
+
+        print(f"   [SUCCESS] Nifty 50 benchmark fetched ({len(bench)} days of history).")
     except Exception as e:
-        print(f"   [WARN] yfinance unavailable — using equal-weighted market proxy as benchmark")
+        print(f"   [WARN] Benchmark coverage gap ({e}) — using internal market proxy.")
         try:
             # Build a proxy Nifty benchmark by computing the equal-weighted average of daily close prices across ALL symbols
             bench = hist.groupby('datetime')['close'].mean()
-            bench.index = pd.to_datetime(bench.index).tz_localize(None)
+            bench.index = pd.to_datetime(bench.index).tz_localize(None).normalize()
             if bench.empty:
                 raise ValueError("Market proxy calculation returned no data")
         except Exception as fe:

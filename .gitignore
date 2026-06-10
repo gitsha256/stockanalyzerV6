@@ -29,3 +29,6 @@ __pycache__/
 
 # Pattern detection cache
 .pattern_cache/
+
+# Analyzer Output Folders (Date-based folders like DD-MM-YYYY)
+[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9]*/

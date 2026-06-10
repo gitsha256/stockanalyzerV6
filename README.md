@@ -41,7 +41,7 @@ Start the core engine to build your database and generate snapshots.
 2. **Run Fetch (Mode 1)**: Initial download of historical data for your chosen range. Generates `raw_data.csv`.
 3. **Update (Mode 2)**: Daily maintenance. Appends the latest trading session to your existing database.
 4. **Adjust (Mode 3)**: Mathematically adjusts historical prices for stock splits and bonuses. Reads `raw_data.csv` and generates the essential `data.csv`.
-5. **Analyze (Mode 4)**: Computes all technical indicators, stages, and zones. Generates the `snapshot.csv` signal file. Toggle CPU-intensive **Chart Pattern Analysis** on or off here.
+5. **Analyze (Mode 4)**: Computes all technical indicators, stages, and zones. Generates the `snapshot.csv` signal file. **Pro-tip:** Press **Enter** at the date prompt to automatically use the latest available data; the script will confirm the date it finds before starting.
 
 > **Daily Workflow in Practice:**
 > ```
@@ -50,12 +50,12 @@ Start the core engine to build your database and generate snapshots.
 > ```
 > Run Mode 3 (Adjust) only when a corporate action (split/bonus) is detected — not daily.
 
-### 3. Automated Reporting (`workflow.py`)
+### 3. Automated Reporting & Organization (`analyzer.py`)
 
 Instead of running individual scripts after analysis, use the workflow orchestrator to process your latest snapshot in one command:
 
 ```bash
-python workflow.py
+python analyzer.py
 ```
 
 This automatically triggers the full post-analysis pipeline in sequence:
@@ -72,7 +72,8 @@ This automatically triggers the full post-analysis pipeline in sequence:
 | Script | Description |
 | :--- | :--- |
 | `main.py` | **The V6 Core Engine.** Replaces legacy analyzers. Centralizes market universe selection, data management (Fetch/Update/Adjust), and technical snapshot generation. |
-| `workflow.py` | **The Orchestrator.** A master script that automates the full post-analysis pipeline: Formatter → Sectoral → Screener → SMA Filter. |
+| `analyzer.py` | **Master Analyzer Suite.** Processes snapshots and organizes results into date-based folders (e.g., `DD-MM-YYYY` or `DD-MM-YYYY_all` for broader market). |
+| `analyzer.py` | **The Orchestrator.** Automates the full post-analysis pipeline by calling the analyzer and other reporting tools in sequence. |
 | `sectoralanalysis.py` | **The Master Strategy Bridge.** A proprietary Manual RRG engine that synthesizes sector indices, calculates multi-factor Rotational Scores, and enforces sector-specific trade filters. |
 | `formatter.py` | **The Visualization Engine.** Converts snapshots to professional multi-sheet Excel reports with automated heat-mapping. |
 | `screen_stocks.py` | **The Ranking Engine.** Applies multi-weighted scoring algorithms to produce top-tier Intraday and Weekly Swing candidates. |
@@ -284,7 +285,7 @@ vola,mpat,pcon,psta,pend,ppnt,xpat,patt,obv,sect
 
 ### 🔍 Screening and Filtering
 
-Once snapshots are generated, use the secondary tools directly or run `workflow.py` to trigger all at once.
+Once snapshots are generated, use the secondary tools directly or run `analyzer.py` to trigger all at once.
 
 **Run Screener** (Top 10 Intraday + Swing picks):
 ```bash
@@ -303,7 +304,7 @@ python sma_filter.py
 
 **Run All At Once**:
 ```bash
-python workflow.py
+python analyzer.py
 ```
 
 ---
@@ -369,7 +370,7 @@ python formatter.py
 stockanalyzerV6/
 │
 ├── main.py                  # V6 Core Engine — data management + snapshot generation
-├── workflow.py              # Orchestrator — runs full post-analysis pipeline
+├── analyzer.py              # Orchestrator — runs full post-analysis pipeline
 ├── formatter.py             # Visualization — Excel heatmap reports
 ├── screen_stocks.py         # Screener — Intraday + Swing ranking engine
 ├── sectoralanalysis.py      # RRG — Sector rotation + institutional filtering

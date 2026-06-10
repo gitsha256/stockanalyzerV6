@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import pandas_ta as ta
 import os
 from scipy.signal import argrelextrema
 from tqdm import tqdm
@@ -67,7 +68,12 @@ def analyze_symbol(symbol: str, full_df: pd.DataFrame, benchmark_daily_close: pd
 
         # Weekly RSI and SMA30 for display
         weekly_df = data.resample('W-FRI', on='datetime').agg({'close': 'last'}).dropna()
-        w_rsi = weekly_df['close'].tail(14).pct_change().sum() # simplified placeholder if needed, indicators.py handled daily
+        if len(weekly_df) > 14:
+            w_rsi_series = ta.rsi(weekly_df['close'], length=14)
+            w_rsi = w_rsi_series.iloc[-1] if w_rsi_series is not None and not w_rsi_series.empty else np.nan
+        else:
+            w_rsi = np.nan
+            
         w_sma30 = weekly_df['close'].rolling(30).mean().iloc[-1] if len(weekly_df) >= 30 else np.nan
 
         latest = data.iloc[-1]

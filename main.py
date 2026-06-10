@@ -95,7 +95,12 @@ def main():
                             analysis_df.to_csv(outfile, index=False)
                             print(f"[SUCCESS] Saved {outfile}")
             else:
-                if date_input: adj = adj[adj['datetime'] <= datetime.strptime(date_input, '%d-%m-%Y')]
+                if not date_input:
+                    latest_dt = adj['datetime'].max()
+                    print(f"[INFO] Loading latest available date: {latest_dt.strftime('%d-%m-%Y')}")
+                else:
+                    adj = adj[adj['datetime'] <= datetime.strptime(date_input, '%d-%m-%Y')]
+                
                 analysis_df = perform_technical_analysis(adj, sector_df, enable)
                 if not analysis_df.empty:
                     outfile = f"{pd.to_datetime(analysis_df['date']).max().strftime('%d-%m-%y')}snapshot{suffix}.csv"
